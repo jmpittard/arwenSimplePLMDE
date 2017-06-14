@@ -37,7 +37,7 @@ CFLAGS = -O3
 CCOMP = g++
 
 #Linking options (g = debugging, pg = GNU profiler)
-LDFLAGS = -O3
+LDFLAGS = -O3 -fast
 #LDFLAGS = -g
 #LDFLAGS = -O3
 #LDFLAGS = -pg -g

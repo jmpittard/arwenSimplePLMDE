@@ -47,16 +47,18 @@ extern void quit();
 
 using namespace std;
 
-// Global arrays with file scope
+// Global arrays with file scope (for gridlet)
 double p[iqmax][kk][jj][ii]; // primitive variables on gridlet
 double c[iqmax][kk][jj][ii]; // conserved
 double s[iqmax][kk][jj][ii]; // source terms
 double diff[nd][kk][jj][ii][iqmax]; // primitive differences in each direction
 double flux[nd][kk][jj][ii][iqmax]; // conserved fluxes      ---------"-------
-double pL[iqmax];
-double pR[iqmax];
 double vol[kk][jj][ii]; // cell volumes on gridlet
 double area[3][kk][jj][ii]; // cell areas in each direction on gridlet
+
+// Global arrays with file scope
+double pL[iqmax];
+double pR[iqmax];
 
 
 /*!  \brief Set the values of the gridlet indices, which are only
@@ -84,6 +86,14 @@ void setupGridletIndices(){
   else{
     krs = 0;
     kre = 1;
+  }
+
+  if (ncycle == 0){
+    cout << "lg.irs jrs krs = " << lg.irs << " " << lg.jrs << " " << lg.krs << "\n";
+    cout << "lg.ire jre kre = " << lg.ire << " " << lg.jre << " " << lg.kre << "\n";
+
+    cout << " gridlet irs jrs krs = " << irs << " " << jrs << " " << krs << "\n";
+    cout << " gridlet ire jre kre = " << ire << " " << jre << " " << kre << "\n";
   }
   
   return;
@@ -148,6 +158,8 @@ void update(){
  */
 void unsplit(){
 
+  //cout << "unsplit: dt = " << dt << "\n";
+
   fillGhostCells(lg.P0);
 
   // Predictor step: calculates Pstar at t^(n+1)
@@ -205,7 +217,7 @@ void unsplit(){
  *   \date Last modified: 19.04.12 (JMP)
  */
 void fillGhostCells(double P[][kmaxd][jmaxd][imaxd]){
-
+  
   // Leftx ghost cells    
   if (lg.nleftx == 0){ // reflecting
     for (int k = lg.krs; k <= lg.kre; ++k){
@@ -626,27 +638,53 @@ void calculateVolumes(int igg, int jgg, int kgg){
   double dx = 1.0;
   double dy = 1.0;
   double dz = 1.0;
+  int j = 0;
+  int k = 0;
     
   if (lg.geom == "XYZ"){
-    for (int k = 0; k < kk; ++k){
-      gk = kgg*kg + k; // index of cell on grid
-      dz = lg.zdz[gk];
+    if (nd == 1){
+      for (int i = 0; i < ii; ++i){
+	gi = igg*ig + i; // index of cell on grid
+        dx = lg.zdx[gi];
+	vol[k][j][i] = dx;
+      }
+    }
+    else if (nd == 1){
       for (int j = 0; j < jj; ++j){
 	gj = jgg*jg + j; // index of cell on grid
 	dy = lg.zdy[gj];
 	for (int i = 0; i < ii; ++i){
 	  gi = igg*ig + i; // index of cell on grid
 	  dx = lg.zdx[gi];
-	  vol[k][j][i] = dx*dy*dz;
+	  vol[k][j][i] = dx*dy;
 	}
+      }
+    }
+    else{
+      for (int k = 0; k < kk; ++k){
+        gk = kgg*kg + k; // index of cell on grid
+        dz = lg.zdz[gk];
+        for (int j = 0; j < jj; ++j){
+	  gj = jgg*jg + j; // index of cell on grid
+	  dy = lg.zdy[gj];
+	  for (int i = 0; i < ii; ++i){
+	    gi = igg*ig + i; // index of cell on grid
+	    dx = lg.zdx[gi];
+	    vol[k][j][i] = dx*dy*dz;
+	  }
+        }
       }
     }
   }
   else if (lg.geom == "ZRP"){
-    for (int k = 0; k < kk; ++k){
-      gk = kgg*kg + k; // index of cell on grid
-      dz = lg.zdz[gk];
-      if (nd == 2) dz = pi;
+    if (nd == 1){
+      for (int i = 0; i < ii; ++i){
+	gi = igg*ig + i; // index of cell on grid
+        dx = lg.zdx[gi];
+	vol[k][j][i] = dx;
+      }
+    }
+    else if (nd == 2){
       for (int j = 0; j < jj; ++j){
 	gj = jgg*jg + j;   // index of cell on grid
 	r1 = lg.zya[gj];   // inner radius of cell
@@ -654,19 +692,41 @@ void calculateVolumes(int igg, int jgg, int kgg){
 	for (int i = 0; i < ii; ++i){
 	  gi = igg*ig + i; // index of cell on grid
 	  dx = lg.zdx[gi];
-	  vol[k][j][i] = mabs(r2*r2 - r1*r1)*dx*dz;
-          if (nd == 3){
-	    cout << "calculateVolumes: check this!\n";
-            quit();
+	  vol[k][j][i] = mabs(r2*r2 - r1*r1)*dx*pi;
+	}
+      }
+    }
+    else{
+      cout << "calculateVolumes: check this!\n";
+      quit();
+      for (int k = 0; k < kk; ++k){
+        gk = kgg*kg + k; // index of cell on grid
+        dz = lg.zdz[gk];
+        for (int j = 0; j < jj; ++j){
+  	  gj = jgg*jg + j;   // index of cell on grid
+	  r1 = lg.zya[gj];   // inner radius of cell
+	  r2 = lg.zya[gj+1]; // outer radius
+	  for (int i = 0; i < ii; ++i){
+	    gi = igg*ig + i; // index of cell on grid
+	    dx = lg.zdx[gi];
+	    vol[k][j][i] = mabs(r2*r2 - r1*r1)*dx*dz; // replace dz with dtheta?
 	  }
 	}
       }
     }
   }
   else if (lg.geom == "RTP"){
-    for (int k = 0; k < kk; ++k){
-      gk = kgg*kg + k; // index of cell on grid
-      dz = lg.zdz[gk];
+    // dy and dz should be fractions of pi if 2D/3D, and =1.0 if 1D
+    if (nd == 1){
+      for (int i = 0; i < ii; ++i){
+	gi = igg*ig + i; // index of cell on grid
+        r1 = lg.zxa[gi];    // inner radius of cell
+	r2 = lg.zxa[gi+1];  // outer radius
+	vol[k][j][i] = 4.0*pi*mabs(r2*r2*r2 - r1*r1*r1)*dy*dz/3.0;
+	//cout << "calcVol: i = " << i << "; vol = " << vol[k][j][i] << "\n"; 
+      }
+    }
+    else if (nd == 2){
       for (int j = 0; j < jj; ++j){
 	gj = jgg*jg + j; // index of cell on grid
 	dy = lg.zdy[gj];
@@ -674,10 +734,22 @@ void calculateVolumes(int igg, int jgg, int kgg){
 	  gi = igg*ig + i; // index of cell on grid
 	  r1 = lg.zxa[gi];    // inner radius of cell
 	  r2 = lg.zxa[gi+1];  // outer radius
-	  vol[k][j][i] = 4.0*pi*mabs(r2*r2*r2 - r1*r1*r1)*dy*dz/3.0; // dy and dz should be fractions of pi if 2D/3D, and =1.0 if 1D
-          if (nd > 1){
-	    cout << "calculateVolumes: check this. Only coded for 1D at the mo!\n";
-            quit();
+	  vol[k][j][i] = 4.0*pi*mabs(r2*r2*r2 - r1*r1*r1)*dy*dz/3.0; // check this!
+	}
+      }
+    }
+    else{
+      for (int k = 0; k < kk; ++k){
+        gk = kgg*kg + k; // index of cell on grid
+        dz = lg.zdz[gk];
+        for (int j = 0; j < jj; ++j){
+	  gj = jgg*jg + j; // index of cell on grid
+	  dy = lg.zdy[gj];
+	  for (int i = 0; i < ii; ++i){
+	    gi = igg*ig + i; // index of cell on grid
+	    r1 = lg.zxa[gi];    // inner radius of cell
+	    r2 = lg.zxa[gi+1];  // outer radius
+	    vol[k][j][i] = 4.0*pi*mabs(r2*r2*r2 - r1*r1*r1)*dy*dz/3.0; // check this!
 	  }
 	}
       }
@@ -690,6 +762,9 @@ void calculateVolumes(int igg, int jgg, int kgg){
   //	cout << i << "\t" << j << "\t" << k << "\t" << vol[k][j][i] << "\n";
   //    }
   //  }
+  //}
+  //for (int i = 0; i < 15; ++i){
+  //   cout << i << "\t" << vol[0][0][i] << "\n";
   //}
   //quit();
   return;
@@ -713,6 +788,9 @@ void calculateAreas(int igg, int jgg, int kgg){
   double dx = 1.0;
   double dy = 1.0;
   double dz = 1.0;
+  int i = 0;
+  int j = 0;
+  int k = 0;
     
   if (lg.geom == "XYZ"){
     for (int k = 0; k < kk; ++k){
@@ -732,9 +810,14 @@ void calculateAreas(int igg, int jgg, int kgg){
     }
   }
   else if (lg.geom == "ZRP"){
-    for (int k = 0; k < kk; ++k){
-      gk = kgg*kg + k; // index of cell on grid
-      dz = lg.zdz[gk];
+    if (nd == 1){
+      for (int i = 0; i < ii; ++i){
+	gi = igg*ig + i; // index of cell on grid
+        dx = lg.zdx[gi];
+	area[0][k][j][i] = 1.0;
+      }
+    }
+    else if (nd == 2){
       for (int j = 0; j < jj; ++j){
 	gj = jgg*jg + j;   // index of cell on grid
 	r1 = lg.zya[gj];   // inner radius of cell
@@ -744,18 +827,39 @@ void calculateAreas(int igg, int jgg, int kgg){
 	  dx = lg.zdx[gi];
 	  area[0][k][j][i] = mabs((r2*r2 - r1*r1)*pi);
 	  area[1][k][j][i] = 2.0*pi*mabs(r1)*dx; // face normal along "r" (dx is actually dz)
-           if (nd == 3){
-	    cout << "calculateAreas: check this!\n";
-            quit();
-	  }
+	}
+      }
+    }
+    else{
+      cout << "calculateAreas: check this!\n";
+      quit();
+      for (int k = 0; k < kk; ++k){
+        gk = kgg*kg + k; // index of cell on grid
+        dz = lg.zdz[gk];
+        for (int j = 0; j < jj; ++j){
+	  gj = jgg*jg + j;   // index of cell on grid
+	  r1 = lg.zya[gj];   // inner radius of cell
+	  r2 = lg.zya[gj+1]; // outer radius
+	  for (int i = 0; i < ii; ++i){
+	    gi = igg*ig + i; // index of cell on grid
+	    dx = lg.zdx[gi];
+	    area[0][k][j][i] = mabs((r2*r2 - r1*r1)*pi*dz); // dz should be fraction of phi
+	    area[1][k][j][i] = 2.0*pi*mabs(r1)*dx*dz; // face normal along "r" (dx is actually dz) (dz should be fraction of phi)
+	    area[2][k][j][i] = -1.0; // Need to work out still!!!!
+ 	  }
 	}
       }
     }
   }
   else if (lg.geom == "RTP"){
-    for (int k = 0; k < kk; ++k){
-      gk = kgg*kg + k; // index of cell on grid
-      dz = lg.zdz[gk];
+    if (nd == 1){
+      for (int i = 0; i < ii; ++i){
+	gi = igg*ig + i; // index of cell on grid
+	r1 = lg.zxa[gi];    // inner radius of cell
+	area[0][k][j][i] = 4.0*pi*r1*r1;
+      }
+    }
+    else if (nd == 2){
       for (int j = 0; j < jj; ++j){
 	gj = jgg*jg + j; // index of cell on grid
 	dy = lg.zdy[gj];
@@ -763,13 +867,32 @@ void calculateAreas(int igg, int jgg, int kgg){
 	  gi = igg*ig + i; // index of cell on grid
 	  r1 = lg.zxa[gi];    // inner radius of cell
 	  r2 = lg.zxa[gi+1];  // outer radius
-	  area[0][k][j][i] = 4.0*pi*r1*r1; // dy and dz should be fractions of pi if 2D/3D, and = 1.0 if 1D
-          if (nd > 1){
-	    cout << "calculateAreas: check this too!\n";
-            quit();
+	  area[0][k][j][i] = -1.0; // STILL TO WORK OUT! dy and dz should be fractions of pi if 2D/3D, and = 1.0 if 1D
+	  area[1][k][j][i] = -1.0; // STILL TO WORK OUT! dy and dz should be fractions of pi if 2D/3D, and = 1.0 if 1D
+        }
+      }
+    }
+    else{
+      for (int k = 0; k < kk; ++k){
+        gk = kgg*kg + k; // index of cell on grid
+        dz = lg.zdz[gk];
+        for (int j = 0; j < jj; ++j){
+	  gj = jgg*jg + j; // index of cell on grid
+	  dy = lg.zdy[gj];
+	  for (int i = 0; i < ii; ++i){
+	    gi = igg*ig + i; // index of cell on grid
+	    r1 = lg.zxa[gi];    // inner radius of cell
+	    r2 = lg.zxa[gi+1];  // outer radius
+	    area[0][k][j][i] = -1.0; // STILL TO WORK OUT! dy and dz should be fractions of pi if 2D/3D, and = 1.0 if 1D
+	    area[1][k][j][i] = -1.0; // STILL TO WORK OUT!
+	    area[2][k][j][i] = -1.0; // STILL TO WORK OUT!
 	  }
 	}
       }
+    }
+    if (nd > 1){
+      cout << "calculateAreas: check this too!\n";
+      quit();
     }
   }
   
@@ -806,9 +929,9 @@ void calculateSourceTerms(int igg, int jgg, int kgg){
   // Calculate the geometric source term for each real cell on the gridlet.
   // Initialize...
   for (int n = 0; n < iqmax; ++n){
-    for (int k = krs; k <= kre; ++k){
-      for (int j = jrs; j <= jre; ++j){
-	for (int i = irs; i <= ire; ++i){
+    for (int k = krs; k < kre; ++k){
+      for (int j = jrs; j < jre; ++j){
+	for (int i = irs; i < ire; ++i){
 	  s[n][k][j][i] = 0.0;
 	}
       }
@@ -816,15 +939,15 @@ void calculateSourceTerms(int igg, int jgg, int kgg){
   }
 
   if (lg.geom == "ZRP"){
-    for (int k = krs; k <= kre; ++k){
-      for (int j = jrs; j <= jre; ++j){
+    for (int k = krs; k < kre; ++k){
+      for (int j = jrs; j < jre; ++j){
 	gj = jgg*jg + j; // j index on the grid
 	rc = lg.zyg[gj]; // Cell COM r-coordinate
 	dr = lg.zdy[gj];
 	dicell = gj-nghost+1; // j-index such that first real cell has index of 1 (to match Eq. A14 in the mg method paper) - see p85 of Hydro Book III
 	fac = 2.0/(2.0*dicell - 1.0);
 	fac2 = dr*(float(dicell) - 0.5) - rc;
-	for (int i = irs; i <= ire; ++i){
+	for (int i = irs; i < ire; ++i){
 	  pre = p[iqe][k][j][i]; // initial pressure
 	  difflp = (p[iqe][k][j][i] - p[iqe][k][j-1][i])/(rc - lg.zyg[gj-1]);
 	  diffrp = (p[iqe][k][j+1][i] - p[iqe][k][j][i])/(lg.zyg[gj+1] - rc);
@@ -835,9 +958,9 @@ void calculateSourceTerms(int igg, int jgg, int kgg){
     }
   }
   else if (lg.geom == "RTP"){
-    for (int k = krs; k <= kre; ++k){
-      for (int j = jrs; j <= jre; ++j){
-	for (int i = irs; i <= ire; ++i){
+    for (int k = krs; k < kre; ++k){
+      for (int j = jrs; j < jre; ++j){
+	for (int i = irs; i < ire; ++i){
 	  pre = p[iqe][k][j][i]; // initial pressure
 	  gi = igg*ig + i; // i index on the grid
 	  rg = lg.zxg[gi]; // Cell COM r-coordinate
@@ -850,19 +973,23 @@ void calculateSourceTerms(int igg, int jgg, int kgg){
 	  diffrp = (p[iqe][k][j][i+1] - p[iqe][k][j][i])/(lg.zxg[gi+1] - rg);
 	  dpdr = av(diffrp, difflp);
 	  s[iqu0][k][j][i] += (fac/dr)*(pre + fac2*dpdr); // r-mtm geometric source term in RTP geometry 
+          //if (i < 3){
+          //  cout << "calcSourceTerms: i = " << i << "; s    (dup) = " << s[iqd][k][j][i] << " " << s[iqu0][k][j][i] << " " << s[iqe][k][j][i] << "\n";
+	  //}
 	}
       }
     }
   }
   
-  //for (int k = krs; k <= kre; ++k){
-  //  for (int j = jrs; j <= jre; ++j){
-  //    for (int i = irs; i <= ire; ++i){
+  //for (int k = krs; k < kre; ++k){
+  //  for (int j = jrs; j < jre; ++j){
+  //    for (int i = irs; i < ire; ++i){
   //	cout << i << "\t" << j << "\t" << k << "\t" << s[iqd][k][j][i] << "\t" << s[iqu0+1][k][j][i] << "\t" << s[iqe][k][j][i] << "\n";
   //    }
   //  }
   //}
   //quit();
+
 
   return;
 }
@@ -1115,7 +1242,8 @@ void calculatePstar(int igg, int jgg, int kgg){
 
   // Pstar is calculated at t^(n+1) = t^(n) + dt
   double delt = dt;
-        
+  //cout << "calcPstar: dt = " << dt << "\n";
+  
   // Set default loop ranges. irs -> ire-1 inclusive will update only the real cells on the gridlet
     
   igmin = irs;
@@ -1158,9 +1286,21 @@ void calculatePstar(int igg, int jgg, int kgg){
 	area1 = area[0][k][j][i];   // area of left face 
 	area2 = area[0][k][j][i+1]; // area of right face 
 
+	//if (i < 3){
+	//  cout << "calcPstar: ijk = " << i << " " << j << " " << k << "; vol = " << vol[k][j][i] << "; delt = " << delt << "\n";
+	//  cout << "calcPstar: i = " << i << "; cstarorig(dup) = " << cstar[iqd] << " " << cstar[iqu0] << " " << cstar[iqe] << "\n";
+	//}
+	
 	for (int n = 0; n < iqmax; ++n){
 	  cstar[n] += (flux[0][k][j][i][n]*area1 - flux[0][k][j][i+1][n]*area2)*dtvol;
 	}
+
+	//if (i < 3){
+        //  cout << "calcPstar: i = " << i << "; flux(dup) = " << flux[0][k][j][i][iqd] << " " << flux[0][k][j][i][iqu0] << " " << flux[0][k][j][i][iqe] << "\n";
+	//  cout << "calcPstar: i = " << i << "; flux(dup)+1 = " << flux[0][k][j][i+1][iqd] << " " << flux[0][k][j][i+1][iqu0] << " " << flux[0][k][j][i+1][iqe] << "\n";
+	//  cout << "calcPstar: i = " << i << "; area1 = " << area1 << "; area2 = " << area2 << "; dtvol = " << dtvol << "\n";
+	//  cout << "calcPstar: i = " << i << "; cstar(dup) = " << cstar[iqd] << " " << cstar[iqu0] << " " << cstar[iqe] << "\n";
+	//}
 
 	if (nd > 1){
 	  // Direction "1"
@@ -1187,14 +1327,25 @@ void calculatePstar(int igg, int jgg, int kgg){
 	  cstar[n] += delt*s[n][k][j][i];
 	}
 
+	//if (i < 3){
+        //  cout << "calcPstar: i = " << i << "; s    (dup) = " << s[iqd][k][j][i] << " " << s[iqu0][k][j][i] << " " << s[iqe][k][j][i] << "\n";
+	//  cout << "calcPstar: i = " << i << "; cstar(dup) = " << cstar[iqd] << " " << cstar[iqu0] << " " << cstar[iqe] << "\n";
+	//}
+
 	// Now calculate Pstar on the grid
 	consToPrim(cstar,pstar);
   	for (int n = 0; n < iqmax; ++n){
 	  lg.Pstar[n][gk][gj][gi] = pstar[n];
 	}
+
+	//if (i < 3){
+	//  cout << "calcPstar: i = " << i << "; pstar(dup) = " << pstar[iqd] << " " << pstar[iqu0] << " " << pstar[iqe] << "\n";
+	//}
+
       }
     }
   }
+  //quit();
 
   //for (int k = kgmin; k < kgmax; ++k){
   //  gk = kgg*kg + k; // k index on the grid
@@ -1274,6 +1425,14 @@ void calculateP(int igg, int jgg, int kgg){
 	  cnew[n] = 0.5*(cstar[n] + c[n]);
 	}
                 
+	//if (i < 3){
+	//  cout << "calcP: ijk = " << i << " " << j << " " << k << "; vol = " << vol[k][j][i] << "; delt = " << delt << "\n";
+	//  cout << "calcP: i = " << i << "; pstar(dup) = " << pstar[iqd] << " " << pstar[iqu0] << " " << pstar[iqe] << "\n";
+	//  cout << "calcP: i = " << i << "; cstar(dup) = " << cstar[iqd] << " " << cstar[iqu0] << " " << cstar[iqe] << "\n";
+	//  cout << "calcP: i = " << i << "; c(dup) = " << c[iqd] << " " << c[iqu0] << " " << c[iqe] << "\n";
+	//  cout << "calcP: i = " << i << "; cnew(dup) = " << cnew[iqd] << " " << cnew[iqu0] << " " << cnew[iqe] << "\n";
+	//}
+
 	// Multiply fluxes by cell areas
 	// For cell[k,j,i], the net fluxes through the left and right faces
 	// in direction "0" are (+flux[id][k][j][i] and -flux[id][k][j][i+1]). 
@@ -1286,6 +1445,13 @@ void calculateP(int igg, int jgg, int kgg){
 	for (int n = 0; n < iqmax; ++n){
 	  cnew[n] += (flux[0][k][j][i][n]*area1 - flux[0][k][j][i+1][n]*area2)*dtvol;
 	}
+
+	//if (i < 3){
+        //  cout << "calcP: i = " << i << "; flux(dup) = " << flux[0][k][j][i][iqd] << " " << flux[0][k][j][i][iqu0] << " " << flux[0][k][j][i][iqe] << "\n";
+	//  cout << "calcP: i = " << i << "; flux(dup)+1 = " << flux[0][k][j][i+1][iqd] << " " << flux[0][k][j][i+1][iqu0] << " " << flux[0][k][j][i+1][iqe] << "\n";
+	//  cout << "calcP: i = " << i << "; area1 = " << area1 << "; area2 = " << area2 << "; dtvol = " << dtvol << "\n";
+	//  cout << "calcP: i = " << i << "; cnew(dup) = " << cnew[iqd] << " " << cnew[iqu0] << " " << cnew[iqe] << "\n";
+	//}
 
 	if (nd > 1){
 	  // Direction "1"
@@ -1317,10 +1483,18 @@ void calculateP(int igg, int jgg, int kgg){
   	for (int n = 0; n < iqmax; ++n){
 	  lg.P0[n][gk][gj][gi] = pnew[n];
 	}
+
+	//if (i < 3){
+        //  cout << "calcP: i = " << i << "; s   (dup) = " << s[iqd][k][j][i] << " " << s[iqu0][k][j][i] << " " << s[iqe][k][j][i] << " " << "\n";
+	//  cout << "calcP: i = " << i << "; cnew(dup) = " << cnew[iqd] << " " << cnew[iqu0] << " " << cnew[iqe] << "\n";
+	//  cout << "calcP: i = " << i << "; pnew(dup) = " << pnew[iqd] << " " << pnew[iqu0] << " " << pnew[iqe] << "\n";
+	//}
+
       }
     }
   }
-
+  //quit();
+  
   //for (int k = kgmin; k < kgmax; ++k){
   //  gk = kgg*kg + k; // k index on the grid
     //for (int j = jgmin; j < jgmax; ++j){
@@ -1543,6 +1717,9 @@ void riemann(int direc, double pL[iqmax], double pR[iqmax], double flux[iqmax]){
   }
   flux[iqe] += avise*cvis*(pL[iqe]/pL[iqd] - pR[iqe]/pR[iqd]);
  
+  //cout << "pL(dup) = " << pL[iqd] << " " << pL[iqu0] << " " << pL[iqe] << " " << "; pR(dup) = " << " " << pR[iqd] << " " << pR[iqu0] << " " << pR[iqe] << " " << "; flux(dup) = " << " " << flux[iqd] << " " << flux[iqu0] << " " << flux[iqe] << "\n";
+  //quit();
+
   return;
 
 }
